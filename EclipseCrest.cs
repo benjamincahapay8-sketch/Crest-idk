@@ -19,27 +19,35 @@ namespace EclipseCrestMod
     public class Plugin : BaseUnityPlugin
     {
         public static Plugin I;
-        public static ConfigEntry<bool> Enabled;
         void Awake()
         {
             I = this;
             Logger.LogInfo("[Eclipse] step 1: Awake started");
-            try { Enabled = Config.Bind("General", "Enabled", true, "Turn the Eclipse moveset on/off"); Logger.LogInfo("[Eclipse] step 2: config ok"); }
-            catch (Exception e) { Logger.LogError("[Eclipse] config failed: " + e); }
-            try { new Harmony("com.eclipse.crest").PatchAll(typeof(Patches)); Logger.LogInfo("[Eclipse] step 3: patches ok"); }
-            catch (Exception e) { Logger.LogError("[Eclipse] patch failed: " + e); }
-            try
-            {
-                var go = new GameObject("EclipseCrest"); DontDestroyOnLoad(go);
-                go.hideFlags = HideFlags.HideAndDontSave;
-                go.AddComponent<Eclipse>();
-                Logger.LogInfo("[Eclipse] step 4: component added");
-            }
-            catch (Exception e) { Logger.LogError("[Eclipse] component failed: " + e); }
+            try { Boot.StageConfig(this); Logger.LogInfo("[Eclipse] step 2: config ok"); }
+            catch (Exception e) { Logger.LogError("[Eclipse] step 2 FAILED: " + e); }
+            try { Boot.StagePatch(); Logger.LogInfo("[Eclipse] step 3: patches ok"); }
+            catch (Exception e) { Logger.LogError("[Eclipse] step 3 FAILED: " + e); }
+            try { Boot.StageComponent(); Logger.LogInfo("[Eclipse] step 4: component added"); }
+            catch (Exception e) { Logger.LogError("[Eclipse] step 4 FAILED: " + e); }
             Logger.LogInfo("[Eclipse] loaded");
         }
         public static void Log(string s) { I.Logger.LogInfo("[Eclipse] " + s); }
         public static void Warn(string s) { I.Logger.LogWarning("[Eclipse] " + s); }
+    }
+
+    // Everything risky lives here, so a failure is caught and logged instead of silently killing the plugin.
+    static class Boot
+    {
+        static ConfigEntry<bool> enabled;
+        public static bool On { get { return enabled == null || enabled.Value; } }
+        public static void StageConfig(BaseUnityPlugin p) { enabled = p.Config.Bind("General", "Enabled", true, "Turn the Eclipse moveset on/off"); }
+        public static void StagePatch() { new Harmony("com.eclipse.crest").PatchAll(typeof(Patches)); }
+        public static void StageComponent()
+        {
+            var go = new GameObject("EclipseCrest"); UnityEngine.Object.DontDestroyOnLoad(go);
+            go.hideFlags = HideFlags.HideAndDontSave;
+            go.AddComponent<Eclipse>();
+        }
     }
 
     // ---------- reflection helpers ----------
@@ -160,7 +168,7 @@ namespace EclipseCrestMod
 
         void Update()
         {
-            if (Plugin.Enabled != null && !Plugin.Enabled.Value) return;
+            if (!Boot.On) return;
             var hero = R.Hero(); if (hero == null) return;
             try
             {
@@ -270,7 +278,7 @@ namespace EclipseCrestMod
             static MethodBase TargetMethod() { return AccessTools.Method(R.T("HealthManager"), "TakeDamage"); }
             static void Prefix(object[] __args)
             {
-                if (Plugin.Enabled == null || !Plugin.Enabled.Value || __args == null || __args.Length == 0) return;
+                if (!Boot.On || __args == null || __args.Length == 0) return;
                 try
                 {
                     var hi = __args[0]; var tr = Traverse.Create(hi);
@@ -294,7 +302,7 @@ namespace EclipseCrestMod
             static MethodBase TargetMethod() { return AccessTools.Method(R.T("HeroController"), "TakeDamage"); }
             static void Prefix(MethodBase __originalMethod, object[] __args)
             {
-                if (Plugin.Enabled != null && !Plugin.Enabled.Value) return;
+                if (!Boot.On) return;
                 try
                 {
                     var ps = __originalMethod.GetParameters();

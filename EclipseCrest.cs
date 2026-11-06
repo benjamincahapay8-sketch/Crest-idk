@@ -60,7 +60,7 @@ namespace EclipseCrestMod
         }
         public static T Get<T>(object o, params string[] path)
         {
-            try { var tr = Traverse.Create(o); foreach (var p in path) tr = tr.Field(p).Value == null && tr.Property(p).Value != null ? tr.Property(p) : tr.Field(p);
+            try { var tr = Traverse.Create(o); foreach (var p in path) { var f = tr.Field(p); tr = f.GetValue() != null ? f : tr.Property(p); }
                 return (T)Convert.ChangeType(tr.GetValue(), typeof(T)); } catch { return default(T); }
         }
     }
